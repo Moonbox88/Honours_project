@@ -4,6 +4,7 @@ import webbrowser
 import subprocess
 import configparser
 import json
+import re
 
 app = Flask(__name__)
 
@@ -58,7 +59,6 @@ def index():
         temp_data = []
         count += 1
 
-    print(data)
     del data[3] 
     del data[1] 
     del data[1]
@@ -77,8 +77,46 @@ def index():
         count += 1
 
     ipcalc_dict = dict(zip(key, value))
+    # DICT HOLDS:
+    #   Address
+    #   Network
+    #   HostMin
+    #   HostMax
+    #   Broadcast
 
-    return render_template("dashboard.html", public_ip=myip_data, gateway_ip=gateway_ip)
+    netstat_req = subprocess.Popen("sudo nmap -F {} | grep 'Nmap\|MAC'".format(ipcalc_dict['Network']), shell=True, stdout=subprocess.PIPE)
+    lines = netstat_req.stdout.read().splitlines()
+
+    ip_addresses = []
+    MAC_addresses = []
+
+    for each in lines:
+        temp = each.decode('utf-8').replace("'", '"')
+        if temp[0] == 'N':
+            ip = re.findall( r'[0-9]+(?:\.[0-9]+){3}', temp )
+            ip_addresses.append(ip)
+        elif temp[0] == 'M':
+            p = re.compile(r'(?:[0-9a-fA-F]:?){12}')
+            mac = re.findall(p, temp)
+            MAC_addresses.append(mac)
+
+    del ip_addresses[-1]
+
+    devices = []
+    count = 0
+    for each in ip_addresses:
+        device = []
+        device.append(ip_addresses[count])
+        if len(MAC_addresses) > count:
+            device.append(MAC_addresses[count])
+        else:
+            device.append("No MAC found")
+        devices.append(device)
+        count += 1
+
+
+
+    return render_template("dashboard.html", public_ip=myip_data, gateway_ip=gateway_ip, devices=devices)
 
 
 def init(app):
