@@ -84,39 +84,84 @@ def index():
     #   HostMax
     #   Broadcast
 
-    netstat_req = subprocess.Popen("sudo nmap -F {} | grep 'Nmap\|MAC'".format(ipcalc_dict['Network']), shell=True, stdout=subprocess.PIPE)
+    netstat_req = subprocess.Popen("sudo nmap -sn {} | grep Nmap".format(ipcalc_dict['Network']), shell=True, stdout=subprocess.PIPE)
     lines = netstat_req.stdout.read().splitlines()
 
     ip_addresses = []
-    MAC_addresses = []
 
     for each in lines:
         temp = each.decode('utf-8').replace("'", '"')
-        if temp[0] == 'N':
+        #print(temp)
+        if temp[:4] == "Nmap":
+            #print(temp)
             ip = re.findall( r'[0-9]+(?:\.[0-9]+){3}', temp )
-            ip_addresses.append(ip)
-        elif temp[0] == 'M':
-            p = re.compile(r'(?:[0-9a-fA-F]:?){12}')
-            mac = re.findall(p, temp)
-            MAC_addresses.append(mac)
-
-    del ip_addresses[-1]
+            if len(ip) > 0:
+                ip = str(ip)[2:-2]
+                ip_addresses.append(ip)
 
     devices = []
-    count = 0
+    # DICT HOLDS:
+    #   Address
+    #   Network
+    #   HostMin
+    #   HostMax
+    #   Broadcast
+
+    #count = 0
     for each in ip_addresses:
+        netstat_req = subprocess.Popen("sudo nmap -sV -O {} | awk '/PORT|ports|open|MAC|fingerprints|Service Info|OS details/'".format(each), shell=True, stdout=subprocess.PIPE)
+        lines = netstat_req.stdout.read().splitlines()
+
         device = []
-        device.append(ip_addresses[count])
-        if len(MAC_addresses) > count:
-            device.append(MAC_addresses[count])
-        else:
-            device.append("No MAC found")
+    
+        key = []
+        value = []
+        port_info = []
+
+        #print("\nDEVICE {}\n".format(count))
+        key.append("IP_address")
+        value.append(each)
+        for each in lines:
+            temp = each.decode('utf-8').replace("'", '"')
+            #print(temp)
+            if temp[:9] == "Not shown":
+                key.append("Port_status")
+                value.append(temp[11:])
+            elif temp[:3] == "All":
+                key.append("Port_status")
+                value.append(temp)
+            elif temp[:4] == "PORT" or ("open" in temp):
+                port_info.append(temp)
+            elif temp[:3] == "MAC":
+                p = re.compile(r'(?:[0-9a-fA-F]:?){12}')
+                mac = re.findall(p, temp)
+                mac = str(mac)[2:-2]
+                key.append("MAC_address")
+                value.append(mac)
+
+                name = re.search('\(([^)]+)', temp).group(1)
+                key.append("Manufacturer")
+                value.append(name)
+            elif temp[:12] == "Service Info":
+                key.append("Service_Info")
+                value.append(temp[14:])
+            elif temp[:10] == "OS_details":
+                key.append("OS_details")
+                value.append(temp[12:])
+            elif "fingerprints" in temp:
+                key.append("OS_details")
+                value.append(temp)
+
+        device = dict(zip(key, value))
         devices.append(device)
-        count += 1
-
-
+        #count += 1
 
     return render_template("dashboard.html", public_ip=myip_data, gateway_ip=gateway_ip, devices=devices)
+
+@app.route('/icons')
+def icons():
+    return render_template("icons.html")
+
 
 
 def init(app):
