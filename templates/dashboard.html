@@ -9,8 +9,10 @@
           <div class="col-md-6">
             <div class="card  card-tasks">
               <div class="card-header ">
+	      <form>	
                 <h5 class="card-category">my details</h5>
-                <h4 class="card-title">{{ public_ip['ip'] }} - {{ public_ip['country'] }}, {{ public_ip['cc'] }}</h4> 
+                <h4 class="card-title" name="public_ip">{{ public_ip['ip'] }} - {{ public_ip['country'] }}, {{ public_ip['cc'] }}</h4>
+		<input type="hidden" name="public-ip" value={{ public_ip['ip'] }} />
               </div>
               <div class="card-body ">
                 <div class="table-full-width table-responsive">
@@ -25,14 +27,10 @@
                             </label>
                           </div>
                         </td>
-			<form>
+			
 			  <td class="text-left" name="default-gateway">Default gateway - {{ gateway_ip }}</td>
 			  <input type="hidden" name="default-gateway" value={{ gateway_ip }} />
                           <td class="td-actions text-right">
-			  <a href="#" id="device-submit"><button type="button" rel="tooltip" title="" class="btn btn-info btn-round btn-icon btn-icon-mini btn-neutral" ondata-original-title="Edit Task">
-                          <i class="now-ui-icons loader_refresh"></i>
-			  </button></a>
-			</form>
                           <button type="button" rel="tooltip" title="" class="btn btn-danger btn-round btn-icon btn-icon-mini btn-neutral" data-original-title="Remove">
                           <i class="now-ui-icons ui-1_simple-remove"></i>
                           </button>
@@ -47,8 +45,13 @@
           <div class="col-md-6">
             <div class="card">
               <div class="card-header">
-                <h5 class="card-category">All Persons List</h5>
                 <h4 class="card-title">Connected Devices</h4>
+		 <a href="#" id="device-submit">
+
+			 <!--<button type="button" rel="tooltip" title="" class="btn btn-info btn-round btn-icon btn-icon-mini btn-neutral" ondata-original-title="Edit Task">-->
+                 <i class="now-ui-icons loader_refresh spin"></i>
+		</a> --- Click to refresh
+	      </form>
               </div>
               <div class="card-body">
                 <div class="table-responsive">
@@ -68,97 +71,19 @@
                       </th>
                     </thead>
                     <tbody class="device-section">
-		      
+		     
                     </tbody>
                   </table>
                 </div>
               </div>
 		<div class="card-footer ">
                 <hr>
-                <div class="stats">
-                  <i class="now-ui-icons loader_refresh spin"></i> Updated 3 minutes ago
-                </div>
               </div>
             </div>
           </div>
         </div>
         <div class="row">
           <div class="col-lg-4">
-            <div class="card card-chart">
-              <div class="card-header">
-		<h5 class="card-category">Global Sales</h5>
-                <h4 class="card-title">Shipped Products</h4>               
-		<div class="dropdown">
-                  <button type="button" class="btn btn-round btn-outline-default dropdown-toggle btn-simple btn-icon no-caret" data-toggle="dropdown">
-                    <i class="now-ui-icons loader_gear"></i>
-                  </button>
-                  <div class="dropdown-menu dropdown-menu-right">
-                    <a class="dropdown-item" href="#">Action</a>
-                    <a class="dropdown-item" href="#">Another action</a>
-                    <a class="dropdown-item" href="#">Something else here</a>
-                    <a class="dropdown-item text-danger" href="#">Remove Data</a>
-                  </div>
-                </div>
-              </div>
-              <div class="card-body">
-                <div class="chart-area">
-                  <canvas id="lineChartExample"></canvas>
-                </div>
-              </div>
-              <div class="card-footer">
-                <div class="stats">
-                  <i class="now-ui-icons arrows-1_refresh-69"></i> Just Updated
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-lg-4 col-md-6">
-            <div class="card card-chart">
-              <div class="card-header">
-                <h5 class="card-category">2018 Sales</h5>
-                <h4 class="card-title">All products</h4>
-                <div class="dropdown">
-                  <button type="button" class="btn btn-round btn-outline-default dropdown-toggle btn-simple btn-icon no-caret" data-toggle="dropdown">
-                    <i class="now-ui-icons loader_gear"></i>
-                  </button>
-                  <div class="dropdown-menu dropdown-menu-right">
-                    <a class="dropdown-item" href="#">Action</a>
-                    <a class="dropdown-item" href="#">Another action</a>
-                    <a class="dropdown-item" href="#">Something else here</a>
-                    <a class="dropdown-item text-danger" href="#">Remove Data</a>
-                  </div>
-                </div>
-              </div>
-              <div class="card-body">
-                <div class="chart-area">
-                  <canvas id="lineChartExampleWithNumbersAndGrid"></canvas>
-                </div>
-              </div>
-              <div class="card-footer">
-                <div class="stats">
-                  <i class="now-ui-icons arrows-1_refresh-69"></i> Just Updated
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-lg-4 col-md-6">
-            <div class="card card-chart">
-              <div class="card-header">
-                <h5 class="card-category">Email Statistics</h5>
-                <h4 class="card-title">24 Hours Performance</h4>
-              </div>
-              <div class="card-body">
-                <div class="chart-area">
-                  <canvas id="barChartSimpleGradientsNumbers"></canvas>
-                </div>
-              </div>
-              <div class="card-footer">
-                <div class="stats">
-                  <i class="now-ui-icons ui-2_time-alarm"></i> Last 7 days
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 {% endblock %} 

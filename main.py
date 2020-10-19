@@ -1,6 +1,8 @@
 from flask import Flask, render_template, jsonify, request
-from models import db, Network
+from models import db, Network, Devices, PacketSniffer, JsonEncodedDict
 from logging.handlers import RotatingFileHandler
+from sqlalchemy.ext import mutable
+from flask_sqlalchemy import SQLAlchemy
 import urllib.request, urllib.parse
 import webbrowser
 import subprocess
@@ -9,6 +11,7 @@ import sqlite3
 import json
 import re
 import logging
+import os
 
 
 app = Flask(__name__)
@@ -17,6 +20,105 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///var/database.db'
 db.init_app(app)
 
 app.secret_key = 'development-key'
+
+
+
+def fill_entry(d):
+	port_status = ""
+	MAC_address = ""
+	Manufacturer = ""
+	Service_info = ""
+	OS_details = ""
+	warnings = ""
+	if (d.get("Port_status") == None):
+		port_status = "none"
+	else:
+		port_status = d['Port_status']
+	if (d.get("MAC_address") == None):
+		MAC_address = "none"
+	else:
+		MAC_address = d['MAC_address']
+	if (d.get("Manufacturer") == None):
+		Manufacturer = "none"
+	else:
+		Manufacturer = d['Manufacturer']
+	if (d.get("Service_info") == None):
+		Service_info = "none"
+	else:
+		Service_info = d['Service_info']
+	if (d.get("OS_details") == None):
+		OS_details = "none"
+	else:
+		OS_details = d['OS_details']
+	if (d.get("warning") == None):
+		warnings = "none"
+	else:
+		warnings = d['warning']
+		
+	new_device = Devices(public_ip, d['IP_address'], port_status, MAC_address, Manufacturer, Service_info, OS_details, d['open_ports'], warnings)
+		
+	return(new_device)
+
+
+def device_db_process(public_ip, devices):
+
+    device_check = Devices.query.get(public_ip)
+	
+	if device_check == None:
+		for d in devices:
+			new_device = fill_entry(d)
+			
+			db.session.add(new_device)
+		db.session.commit()
+	else:
+		#check each new devive (IP) for existing db record
+			#if exists, do nothing
+		conn = sqlite3.connect("var/database.db")
+		cursor = conn.cursor()
+		
+		t = (public_ip,)
+		cursor.execute('SELECT * FROM devices WHERE public_ip = ?', t)
+		
+		result = cursor.fetchall()
+		conn.close()
+		
+		for dev in devices:
+			match = 0
+			for res in result:
+				if (dev['IP_address'] == res[1]):
+					# check MAC address and/or other attributes
+					# if different then not a match
+					# replace db record with new device
+					#print("{} is a match".format(dev['IP_address']))
+					match = 1
+			if (match == 0):
+				# device not in db
+				# add this device to db
+				new_device = fill_entry(dev)
+				db.session.add(new_device)
+			match = 0
+		
+		db.session.commit()
+		
+		# what db records are not found in device list
+		# remove these from the db
+		conn = sqlite3.connect("var/database.db")
+		cursor = conn.cursor()
+			
+		for res in result:
+			match = 0
+			for dev in devices:
+				if (res[1] == dev['IP_address']):
+					#print("{} is a match".format(res[1]))
+					match = 1
+			if (match == 0):
+				cursor.execute('DELETE FROM devices WHERE public_ip = ? AND device_ip = ?', (public_ip, res[1]))
+				conn.commit()
+			match = 0
+		
+		conn.close()
+
+
 
 @app.route("/", methods=['GET', 'POST'])
 def index():
@@ -35,13 +137,16 @@ def index():
     gateway_ip = str(re.findall( r'[0-9]+(?:\.[0-9]+){3}', gateway_ip))[2:-2]
     
     # CHECK DB FOR EXISTING PUBLIC IP
+
+    # REPLACE WITH SQLALCHEMY GET
     sql_conn = sqlite3.connect("var/database.db")
     cursor = sql_conn.cursor()
     
     t = (myip_data['ip'],)
-    ip_db_check = cursor.execute('SELECT public_ip FROM networks WHERE public_ip = ?', t)
+    cursor.execute('SELECT public_ip FROM networks WHERE public_ip = ?', t)
 
     db_result = cursor.fetchone()
+
     sql_conn.close()
     
     # IF NOT FOUND THEN ADD NEW NETWORK RECORD TO DB
@@ -50,12 +155,14 @@ def index():
         db.session.add(new_network)
         db.session.commit()
     
+    
     return render_template("dashboard.html", public_ip=myip_data, gateway_ip=gateway_ip)
 
 
 @app.route('/device_scan')
 def device_scan():
     try:
+        public_ip = request.args.get('public_ip', 0, type=str)
         gateway_ip = request.args.get('gateway_ip', 0, type=str)
 
         netstat_req = subprocess.Popen("ipcalc {}".format(gateway_ip), shell=True, stdout=subprocess.PIPE)
@@ -122,6 +229,15 @@ def device_scan():
                     ip = str(ip)[2:-2]
                     ip_addresses.append(ip)
 
+	# Remove ip for Raspberry Pi host device		
+	netstat_req = subprocess.Popen("ip r | grep src", shell=True, stdout=subprocess.PIPE)
+	this_ip = str(netstat_req.communicate()[0])
+	this_ip = str(re.findall( r'[0-9]+(?:\.[0-9]+){3}', this_ip))[17:-2]
+
+	for ip in ip_addresses:
+		if this_ip in ip_addresses:
+			ip_addresses.remove(this_ip)
+
         app.logger.info("{} network hosts discovered".format(len(ip_addresses)))
 
         devices = []
@@ -132,10 +248,12 @@ def device_scan():
         #   Manufacturer
         #   Service_Info??
         #   OS_details??
+        #   open_ports
+        #   | awk '/PORT|ports|open|MAC|fingerprints|Service Info|OS details/'
 
         count = 1
         for each in ip_addresses:
-            netstat_req = subprocess.Popen("sudo nmap -sV -O {} | awk '/PORT|ports|open|MAC|fingerprints|Service Info|OS details/'".format(each), shell=True, stdout=subprocess.PIPE)
+            netstat_req = subprocess.Popen("sudo nmap -sV -O {} ".format(each), shell=True, stdout=subprocess.PIPE)
             lines = netstat_req.stdout.read().splitlines()
 
             device = []
@@ -144,12 +262,10 @@ def device_scan():
             value = []
             port_info = []
 
-            #print("\nDEVICE {}\n".format(count))
             key.append("IP_address")
             value.append(each)
             for each in lines:
                 temp = each.decode('utf-8').replace("'", '"')
-                #print(temp)
                 if temp[:9] == "Not shown":
                     key.append("Port_status")
                     value.append(temp[11:])
@@ -179,17 +295,99 @@ def device_scan():
                     value.append(temp)
 
             device = dict(zip(key, value))
+
+            
+
+            headers = []
+            ports = []
+            warning = ""
+    
+            head = 0
+            tail = None
+            
+            if port_info != []:
+                i = 0
+                for each in port_info:
+                    if each[:7] == "Warning":
+                        warning = each
+                        continue
+                    temp = []
+                    port_info[i] = ' '.join(each.split())
+                    for e, l in enumerate(port_info[i]):
+                        if i == 0:
+                            if l == " ":
+                                headers.append(port_info[i][tail:head])
+                                tail = head + 1
+                            elif l == port_info[i][-1]:
+                                head += 1
+                                headers.append(port_info[i][tail:head])
+                                head -= 1
+                        else:
+                             if l == " ":
+                                 if len(temp) == 3:
+                                     temp.append(port_info[i][tail:head])
+                                     ports.append(temp)
+                                     break
+                                 else:
+                                     temp.append(port_info[i][tail:head])
+                                     tail = head + 1
+                        head += 1
+                    i += 1
+                    head = 0
+                    tail = None
+                    
+            else:
+                ports.append("No open ports")
+
+            open_ports = []
+            
+            if ports[0] == "No open ports":
+                nein = dict(open_ports = ports[0])
+                device.update(nein)
+            else:
+                for each in ports:
+                    p = dict(zip(headers, each))
+                    open_ports.append(p)
+
+                ct = 1
+                ids = []
+                for each in open_ports:
+                    ids.append(str(ct))
+                    ct += 1
+
+                ports_open = dict(zip(ids, open_ports))
+
+                device.update(dict(open_ports = ports_open))
+                if len(warning) > 0:
+                    device.update(dict(warning = warning))
+                #last_scan = datetime.datetime.now().replace(second=0, microsecond=0)
+                #device.update(dict(last_scan = last_scan))
+                #print(last_scan)
+
             devices.append(device)
 
             scan_percent = count / len(ip_addresses) * 100
-            app.logger.info("Device scan {}% complete".format(scan_percent))
+            app.logger.info("Device scan {}% complete".format(round(scan_percent), 1))
 
             count += 1
 
+        device_db_process(public_ip, devices)
+       
         return jsonify(device_list=devices)
 
     except Exception as e:
         return str(e)
+
+@app.route('/packet_sniff')
+def sniff():
+    iface = 'wlan0'
+    sniffer = PacketSniffer()
+    sniffer.run(iface)
+
+    die = "I died"
+
+    return jsonify(die)
+
 
 
 @app.route('/icons')
@@ -207,10 +405,11 @@ def upgrade():
 @app.route('/user')
 def user():
     return render_template("user.html")
+    
 
 
 def init(app):
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser() 
     try:
         config_location = "etc/defaults.cfg"
         config.read(config_location)
@@ -237,7 +436,7 @@ def logs(app):
 
 if __name__ == "__main__":
     init(app)
-    logs(app)
+    logs(app) 
     webbrowser.open(app.config['SERVER_NAME'])
     app.run(debug=app.config['DEBUG'],
             use_reloader=False)
