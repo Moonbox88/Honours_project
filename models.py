@@ -14,8 +14,8 @@ db = SQLAlchemy()
 
 class Devices(db.Model):
     __tablename__ = 'devices'
-    public_ip = db.Column(db.String(15), primary_key=True)
-    device_ip = db.Column(db.String(15))
+    public_ip = db.Column(db.String(15), db.ForeignKey('networks.public_ip'))
+    device_ip = db.Column(db.String(15), primary_key=True)
     port_status = db.Column(db.String(100))
     MAC_address = db.Column(db.String(17))
     manufacturer = db.Column(db.String(100))
@@ -73,20 +73,5 @@ class PacketSniffer:
             t.join()
         except Exception as e:
             return str(e)
-			
-#class JsonEncodedType(db.TypeDecorator):
-#
- #   impl = db.Text
-#
- #   def process_bind_param(self, value, dialect):
-  #      if value is None:
-   #         return None
-    #    else:
-     #       return json.dumps(value)
-#
- #   def process_result_value(self, value, dialect):
-  #      if value is None:
-   #         return {}
-    #     else:
-     #       return json.loads(value)
+
 

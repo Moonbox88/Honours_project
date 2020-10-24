@@ -23,101 +23,112 @@ app.secret_key = 'development-key'
 
 
 
-def fill_entry(d):
-	port_status = ""
-	MAC_address = ""
-	Manufacturer = ""
-	Service_info = ""
-	OS_details = ""
-	warnings = ""
-	if (d.get("Port_status") == None):
-		port_status = "none"
-	else:
-		port_status = d['Port_status']
-	if (d.get("MAC_address") == None):
-		MAC_address = "none"
-	else:
-		MAC_address = d['MAC_address']
-	if (d.get("Manufacturer") == None):
-		Manufacturer = "none"
-	else:
-		Manufacturer = d['Manufacturer']
-	if (d.get("Service_info") == None):
-		Service_info = "none"
-	else:
-		Service_info = d['Service_info']
-	if (d.get("OS_details") == None):
-		OS_details = "none"
-	else:
-		OS_details = d['OS_details']
-	if (d.get("warning") == None):
-		warnings = "none"
-	else:
-		warnings = d['warning']
-		
-	new_device = Devices(public_ip, d['IP_address'], port_status, MAC_address, Manufacturer, Service_info, OS_details, d['open_ports'], warnings)
-		
-	return(new_device)
+def fill_entry(d, public_ip):
+    port_status = ""
+    MAC_address = ""
+    Manufacturer = ""
+    Service_info = ""
+    OS_details = ""
+    warnings = ""
+
+    if (d.get("Port_status") == None):
+        port_status = "none"
+    else:
+        port_status = d['Port_status']
+
+    if (d.get("MAC_address") == None):
+        MAC_address = "none"
+    else:
+        MAC_address = d['MAC_address']
+
+    if (d.get("Manufacturer") == None):
+        Manufacturer = "none"
+    else:
+        Manufacturer = d['Manufacturer']
+
+    if (d.get("Service_info") == None):
+        Service_info = "none"
+    else:
+        Service_info = d['Service_info']
+    
+    if (d.get("OS_details") == None):
+        OS_details = "none"
+    else:
+        OS_details = d['OS_details']
+
+    if (d.get("warning") == None):
+        warnings = "none"
+    else:
+        warnings = d['warning']
+
+    new_device = Devices(public_ip, d['IP_address'], port_status, MAC_address, Manufacturer, Service_info, OS_details, d['open_ports'], warnings)
+    return(new_device)
 
 
 def device_db_process(public_ip, devices):
+    conn = sqlite3.connect("var/database.db")
+    cursor = conn.cursor()
 
-    device_check = Devices.query.get(public_ip)
+    t = (public_ip,)
+    cursor.execute('SELECT * FROM devices WHERE public_ip = ?', t)
+
+    result = cursor.fetchone()
+    conn.close()
 	
-	if device_check == None:
-		for d in devices:
-			new_device = fill_entry(d)
-			
-			db.session.add(new_device)
-		db.session.commit()
-	else:
-		#check each new devive (IP) for existing db record
-			#if exists, do nothing
-		conn = sqlite3.connect("var/database.db")
-		cursor = conn.cursor()
-		
-		t = (public_ip,)
-		cursor.execute('SELECT * FROM devices WHERE public_ip = ?', t)
-		
-		result = cursor.fetchall()
-		conn.close()
-		
-		for dev in devices:
-			match = 0
-			for res in result:
-				if (dev['IP_address'] == res[1]):
-					# check MAC address and/or other attributes
-					# if different then not a match
-					# replace db record with new device
-					#print("{} is a match".format(dev['IP_address']))
-					match = 1
-			if (match == 0):
-				# device not in db
-				# add this device to db
-				new_device = fill_entry(dev)
-				db.session.add(new_device)
-			match = 0
-		
-		db.session.commit()
-		
-		# what db records are not found in device list
-		# remove these from the db
-		conn = sqlite3.connect("var/database.db")
-		cursor = conn.cursor()
-			
-		for res in result:
-			match = 0
-			for dev in devices:
-				if (res[1] == dev['IP_address']):
-					#print("{} is a match".format(res[1]))
-					match = 1
-			if (match == 0):
-				cursor.execute('DELETE FROM devices WHERE public_ip = ? AND device_ip = ?', (public_ip, res[1]))
-				conn.commit()
-			match = 0
-		
-		conn.close()
+    if result == None:
+        for d in devices:
+            new_device = fill_entry(d, public_ip)
+            db.session.add(new_device)
+        db.session.commit()
+        app.logger.info("{} network hosts commited to database".format(len(devices)))
+    else:
+	#check each new devive (IP) for existing db record
+	#if exists, do nothing
+        conn = sqlite3.connect("var/database.db")
+        cursor = conn.cursor()
 
+        t = (public_ip,)
+        cursor.execute('SELECT * FROM devices WHERE public_ip = ?', t)
+
+        result = cursor.fetchall()
+        conn.close()
+
+        for dev in devices:
+            match = 0
+            for res in result:
+                if (dev['IP_address'] == res[1]):
+                    # check MAC address and/or other attributes
+                    # if different then not a match
+                    # replace db record with new device
+                    match = 1
+            if (match == 0):
+                # device not in db
+                # add this device to db
+                new_device = fill_entry(dev, public_ip)
+                print("DEVICE CREATED")
+                db.session.add(new_device)
+                app.logger.info("Network host added at {}.".format(dev['IP_address']))
+            match = 0
+        print("ABOUT TO COMMIT")
+        db.session.commit()
+
+	# what db records are not found in device list
+	# remove these from the db
+        conn = sqlite3.connect("var/database.db")
+        cursor = conn.cursor()
+
+        for res in result:
+            match = 0
+            for dev in devices:
+                if (res[1] == dev['IP_address']):
+                    #print("{} is a match".format(res[1]))
+                    match = 1
+            if (match == 0):
+                cursor.execute('DELETE FROM devices WHERE public_ip = ? AND device_ip = ?', (public_ip, res[1]))
+                app.logger.info("Network host removed at {}.".format(res[1]))
+                conn.commit()
+            match = 0
+        conn.close()
 
 
 @app.route("/", methods=['GET', 'POST'])
@@ -229,14 +240,14 @@ def device_scan():
                     ip = str(ip)[2:-2]
                     ip_addresses.append(ip)
 
-	# Remove ip for Raspberry Pi host device		
-	netstat_req = subprocess.Popen("ip r | grep src", shell=True, stdout=subprocess.PIPE)
-	this_ip = str(netstat_req.communicate()[0])
-	this_ip = str(re.findall( r'[0-9]+(?:\.[0-9]+){3}', this_ip))[17:-2]
+	# Remove ip for Raspberry Pi host device
+        netstat_req = subprocess.Popen("ip r | grep src", shell=True, stdout=subprocess.PIPE)
+        this_ip = str(netstat_req.communicate()[0])
+        this_ip = str(re.findall( r'[0-9]+(?:\.[0-9]+){3}', this_ip))[17:-2]
 
-	for ip in ip_addresses:
-		if this_ip in ip_addresses:
-			ip_addresses.remove(this_ip)
+        for ip in ip_addresses:
+            if this_ip in ip_addresses:
+                ip_addresses.remove(this_ip)
 
         app.logger.info("{} network hosts discovered".format(len(ip_addresses)))
 
@@ -342,8 +353,11 @@ def device_scan():
             open_ports = []
             
             if ports[0] == "No open ports":
-                nein = dict(open_ports = ports[0])
-                device.update(nein)
+                s = []
+                s.append("No open ports")
+                nein = dict(zip("1", s)
+                        )
+                device.update(dict(open_ports = nein))
             else:
                 for each in ports:
                     p = dict(zip(headers, each))
@@ -366,8 +380,8 @@ def device_scan():
 
             devices.append(device)
 
-            scan_percent = count / len(ip_addresses) * 100
-            app.logger.info("Device scan {}% complete".format(round(scan_percent), 1))
+            scan_percent = float(count / len(ip_addresses) * 100)
+            print("Device scan {}% complete".format(round(scan_percent), 2))
 
             count += 1
 

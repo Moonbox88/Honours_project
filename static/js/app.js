@@ -5,10 +5,11 @@ $(function() {
 			public_ip: $('input[name="public-ip"]').val(),
 		}, function(data) {
 			$.each(data, function(index, value) {
+				$("tr").remove(".device-info");
 				for(i = 0; i < value.length; i++) {
 					var $device_elem = $('tbody.device-section');
 					$device_elem.append(
-						$('<tr/>').append(
+						$('<tr/>', {'class': 'device-info'}).append(
 							$('<td/>', {text: value[i].IP_address})
 						).append(
 							$('<td/>', {text: value[i].Manufacturer})
