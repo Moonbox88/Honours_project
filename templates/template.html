@@ -97,7 +97,7 @@
                 <span class="navbar-toggler-bar bar3"></span>
               </button>
             </div>
-	    <td class="navbar-brand">|</td>
+	   <input type="text" id="sniff-placehold">
           </div>
           <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navigation" aria-controls="navigation-index" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-bar navbar-kebab"></span>
@@ -114,6 +114,7 @@
                     <span class="d-lg-none d-md-block">RunSniff</span>
                   </p>
                 </a>
+	      </form>
               </li>
               <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -123,10 +124,13 @@
                   </p>
                 </a>
                 <div id="sniff-ip-list" class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
-                  
+		{% if (devices) %}
+		{% for dev in devices %}
+		<a class="dropdown-item" href="#" id="sniff-ip" onclick="passSniff('{{dev[1] }}')">{{ dev[1] }}</a>
+		{% endfor %}
+		{% endif %}
                 </div>
               </li>
-	      </form>
               <li class="nav-item dropdown">
 		 <a class="nav-link dropdown-toggle" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
 		  <i class="now-ui-icons loader_gear"></i>
@@ -179,11 +183,9 @@
 	  $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
   </script>
   <script>
-  	function selectSniffIP(a) {
-		return function(e) {
-			alert(a);
-		}
-	}
+	  function passSniff(ip) {
+		  document.getElementById("sniff-placehold").value = ip;
+	  }
   </script>
 </body>
 

@@ -1,13 +1,13 @@
 from flask_sqlalchemy import SQLAlchemy
 from threading import Thread
-from pathlib import Path
-from datetime import datetime
 import subprocess
 import shlex
 import sys
 import io
 import json
 from encoder import JsonEncodedDict
+from pathlib import Path
+from datetime import datetime
 
 db = SQLAlchemy()
 
@@ -49,25 +49,20 @@ class Network(db.Model):
         self.gateway_ip = gateway_ip
 
 class PacketSniffer:
-    def run_tshark(self, iface):
-        print("tshark test with {}.".format(iface))
-        basepath = Path(__file__).parent.absolute()
-        filepath = str((basepath / "packet_captures/{}.pcap".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))).resolve()).replace(" ", "_")
-        
-        f = open(filepath, "w+")
-        f.close()
-        
-        cmd = "tshark -l -i " + iface + " -w " + filepath
-        args = shlex.split(cmd)
+    def run_tshark(self, args):
+        print("tshark test with {}.".format(args[0]))
 
-        tshark = subprocess.Popen(args, stdout=subprocess.PIPE)
-        #for line in io.TextIOWrapper(tshark.stdout, encoding="utf-8"):
-            #print("test: %s" % line.rstrip())
-            #capture_file.write("%s " % line.strip() + '\n')
+        filepath = args[1]
 
-    def run(self, iface):
+        cmd = "tshark -l -i " + args[0] + " -w " + filepath
+        run_args = shlex.split(cmd)
+
+        tshark = subprocess.Popen(run_args, stdout=subprocess.PIPE)
+
+
+    def run(self, args):
         try:
-            t = Thread(target=self.run_tshark, args=(iface, ))
+            t = Thread(target=self.run_tshark, args=(args, ))
             t.daemon = True
             t.start()
             t.join()

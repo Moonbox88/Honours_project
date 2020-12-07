@@ -6,6 +6,7 @@ $(function() {
 		}, function(data) {
 			$.each(data, function(index, value) {
 				$("tr").remove(".device-info");
+				$('a#sniff-ip').remove();
 				for(i = 0; i < value.length; i++) {
 					var $device_elem = $('tbody.device-section');
 					$device_elem.append(
@@ -20,11 +21,10 @@ $(function() {
 						)
 					)
 					var $ipsniff_elem = $('div#sniff-ip-list');
-					//var func = 'fillSniffIP(' + value[i].IP_address + ')'
+					var func = "passSniff.call('" + value[i].IP_address + "')";
 					$ipsniff_elem.append(
-						$('<a/>', {'class': 'dropdown-item', 'href': '#', 'name': 'sniff-ip', 'onClick': 'selectSniffIP(\'' + value[i].IP_address + '\')', text: value[i].IP_address})
-							//$('<input/>', {'type': 'hidden', 'name': 'sniff-ip', 'value': value[i].IP_address})
-						
+						$('<a/>', {'class': 'dropdown-item', 'href': '#', 'id': 'sniff-ip', 'onclick': func, text: value[i].IP_address})
+
 					)
 				};
 			});
@@ -35,18 +35,26 @@ $(function() {
 
 
 $(function() {
-	$('a#run-packet-sniff').click(function() {
-		$.ajax({
-			url: '/packet_sniff',
-			success: function(data) {
-				alert(data.die);
-			},
-			dataType: 'JSON',
-			type: 'GET',
-			error: function() {
-				alert("nein");
-			}
+	$('a#run-packet-sniff').bind('click', function() {
+		$.getJSON('/packet_sniff', {
+			// GET IP PLACEHOLDER FOR ARPSPOOF
+		}, function(data) {
+			$.each(data, function(index, value) {
+				if (index == 1) {
+					var packet_file = value;
+					var canvas = document.getElementById("bigDashboardChart");
+					var ctx = canvas.getContext("2d");
+					ctx.font = "10px Arial";
+					$.get(packet_file,function(txt) {
+						var lines = txt.responseText.split("\n");
+						for (var i = 0, len = lines.length; i < len; i++) {
+							c
+						}
+					});
+				}
+			});
 		});
+		return false;
 	});
 });
 				

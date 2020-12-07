@@ -3,6 +3,13 @@ from models import db, Network, Devices, PacketSniffer, JsonEncodedDict
 from logging.handlers import RotatingFileHandler
 from sqlalchemy.ext import mutable
 from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+from threading import Thread
+from pathlib import Path
+from datetime import datetime
+from pcapng import FileScanner
+import threading
+import logging
 import urllib.request, urllib.parse
 import webbrowser
 import subprocess
@@ -10,8 +17,11 @@ import configparser
 import sqlite3
 import json
 import re
-import logging
 import os
+import shlex
+import io
+import sys
+import time
 
 
 app = Flask(__name__)
@@ -66,21 +76,23 @@ def fill_entry(d, public_ip):
 
 
 def device_db_process(public_ip, devices):
+    
     conn = sqlite3.connect("var/database.db")
     cursor = conn.cursor()
 
     t = (public_ip,)
+        
     cursor.execute('SELECT * FROM devices WHERE public_ip = ?', t)
 
-    result = cursor.fetchone()
+    device_check = cursor.fetchone()
     conn.close()
 	
-    if result == None:
+    if device_check == None:
         for d in devices:
             new_device = fill_entry(d, public_ip)
             db.session.add(new_device)
         db.session.commit()
-        app.logger.info("{} network hosts commited to database".format(len(devices)))
+        app.logger.info("Device list for {} commited to database".format(public_ip))
     else:
 	#check each new devive (IP) for existing db record
 	#if exists, do nothing
@@ -97,7 +109,8 @@ def device_db_process(public_ip, devices):
             match = 0
             for res in result:
                 if (dev['IP_address'] == res[1]):
-                    # check MAC address and/or other attributes
+                    # TODO check MAC address and/or other attributes
+                    # ESPECIALLY check for change in open ports
                     # if different then not a match
                     # replace db record with new device
                     match = 1
@@ -105,11 +118,9 @@ def device_db_process(public_ip, devices):
                 # device not in db
                 # add this device to db
                 new_device = fill_entry(dev, public_ip)
-                print("DEVICE CREATED")
                 db.session.add(new_device)
                 app.logger.info("Network host added at {}.".format(dev['IP_address']))
             match = 0
-        print("ABOUT TO COMMIT")
         db.session.commit()
 
 	# what db records are not found in device list
@@ -147,9 +158,7 @@ def index():
     gateway_ip = str(netstat_req.communicate()[0])
     gateway_ip = str(re.findall( r'[0-9]+(?:\.[0-9]+){3}', gateway_ip))[2:-2]
     
-    # CHECK DB FOR EXISTING PUBLIC IP
-
-    # REPLACE WITH SQLALCHEMY GET
+    # CHECK DB FOR EXISTING PUBLIC IPT
     sql_conn = sqlite3.connect("var/database.db")
     cursor = sql_conn.cursor()
     
@@ -166,6 +175,28 @@ def index():
         db.session.add(new_network)
         db.session.commit()
     
+
+    conn = sqlite3.connect("var/database.db")
+    cursor = conn.cursor()
+
+    t = (myip_data['ip'],)
+        
+    cursor.execute('SELECT * FROM devices WHERE public_ip = ?', t)
+
+    device_result = cursor.fetchone()
+
+    if device_result != None:
+        device_list = []
+        device_list.append(device_result)
+
+        for row in cursor:
+            device_list.append(row)
+
+        conn.close()
+
+        return render_template("dashboard.html", public_ip=myip_data, gateway_ip=gateway_ip, devices=device_list)
+    else:
+        conn.close()
     
     return render_template("dashboard.html", public_ip=myip_data, gateway_ip=gateway_ip)
 
@@ -173,6 +204,8 @@ def index():
 @app.route('/device_scan')
 def device_scan():
     try:
+        # TODO GET IPS FROM DATABASE SELECT
+
         public_ip = request.args.get('public_ip', 0, type=str)
         gateway_ip = request.args.get('gateway_ip', 0, type=str)
 
@@ -249,7 +282,7 @@ def device_scan():
             if this_ip in ip_addresses:
                 ip_addresses.remove(this_ip)
 
-        app.logger.info("{} network hosts discovered".format(len(ip_addresses)))
+        app.logger.info("Network scan for {} hosts: {}".format(len(ip_addresses), ip_addresses))
 
         devices = []
         # DICT FOR EACH DEVICE HOLDS:
@@ -380,8 +413,8 @@ def device_scan():
 
             devices.append(device)
 
-            scan_percent = float(count / len(ip_addresses) * 100)
-            print("Device scan {}% complete".format(round(scan_percent), 2))
+            scan_percent = count / len(ip_addresses) * 100
+            print("Device scan {}% complete".format(round(scan_percent), 1))
 
             count += 1
 
@@ -395,12 +428,46 @@ def device_scan():
 @app.route('/packet_sniff')
 def sniff():
     iface = 'wlan0'
+
+    basepath = Path(__file__).parent.absolute()
+    filepath = str((basepath / "packet_captures/{}.pcap".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))).resolve()).replace(" ", "_")
+    
+    args = []
+    args.append(iface)
+    args.append(filepath)
     sniffer = PacketSniffer()
-    sniffer.run(iface)
+    sniffer.run(args)
+    
+    print("Sniffer thread initialised.")
 
-    die = "I died"
+    time.sleep(30)
 
-    return jsonify(die)
+    cmd = "tshark -r " + filepath
+    run_args = shlex.split(cmd)
+
+    txt_file = filepath[:-4] + "txt"
+    
+
+    f = open(txt_file, "w+")
+
+
+    file_lines = 0
+    count = 0
+
+    with open(filepath, 'rb') as fp:
+        scanner = FileScanner(fp)
+        for block in scanner:
+            print(block.PacketDataField)
+        #tshark = subprocess.Popen(run_args, stdout=subprocess.PIPE)
+        #for line in io.TextIOWrapper(tshark.stdout, encoding="utf-8"):
+            #print("test: %s" % line.rstrip())
+            #f.write(line.rstrip() + "\n")
+            #count = len(scanner.readlines())
+            #print("COUNT: ", count)
+            #if (file_lines == count): 
+                #time.sleep(5)
+
+    return jsonify(filepath[:4])
 
 
 

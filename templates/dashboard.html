@@ -71,7 +71,24 @@
                       </th>
                     </thead>
                     <tbody class="device-section">
-		     
+		    {% if (devices) %}
+			{% for dev in devices %}
+			<tr class="device-info">    
+			     <td>
+				     {{ dev[1] }}
+			     </td>
+			     <td>
+				     {{ dev[4] }}
+			     </td>
+		       	     <td>
+				     {{ dev[3] }}
+			     </td>
+	                     <td> 
+				     {{ dev[6] }}
+			     </td>
+			</tr>
+			{% endfor %}
+		    {% endif %}
                     </tbody>
                   </table>
                 </div>
